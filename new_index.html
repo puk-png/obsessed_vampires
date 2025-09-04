@@ -1,0 +1,112 @@
+<script>
+const SHEET_ID = "16FR9S-8fO4VaiHiY6yEWWmnhB9_NjB48HSYJD58vKrs";
+const TAB_NAME = "Аркуш1";
+const sheetUrl = `https://opensheet.elk.sh/${SHEET_ID}/${encodeURIComponent(TAB_NAME)}`;
+
+let data = [];
+let activeFilter = "";
+const statusEl = document.getElementById('status');
+
+function setStatus(msg){ statusEl.textContent = msg || ""; }
+
+function skeleton(n=6){
+  const container = document.getElementById('cards');
+  container.innerHTML = "";
+  for(let i=0;i<n;i++){
+    const s = document.createElement('div');
+    s.className='card skeleton';
+    s.style.height=(120+Math.floor(Math.random()*40))+'px';
+    container.appendChild(s);
+  }
+}
+
+async function loadData(){
+  try{
+    setStatus('Завантажую дані');
+    skeleton();
+    const res = await fetch(sheetUrl,{cache:'no-store'});
+    if(!res.ok) throw new Error(`HTTP ${res.status}`);
+    const json = await res.json();
+
+    data = json.map(row=>{
+      const title = row['title']?.toString().trim() || 'Без назви';
+      const kw = row['keywords']?.toString().trim() || '';
+      const link = row['link']?.toString().trim() || '#';
+      const fixedLink = link.startsWith('tg://') ? link.replace(/^tg:\/\/resolve\?domain=/, 'https://t.me/') : link;
+      const tags = row['tags']?.toString().trim() || '';
+
+      return {
+        title,
+        keywords: kw.split(/[,;]+/).map(s => s.trim().toLowerCase()).filter(Boolean),
+        link: fixedLink,
+        tags: tags.split('/').map(s => s.trim().toLowerCase()).filter(Boolean)
+      };
+    });
+
+    renderCards(data);
+    attachControls();
+    setStatus('');
+  }catch(err){
+    console.error(err);
+    setStatus('Не вдалося завантажити дані.');
+    document.getElementById('cards').innerHTML='<p class="empty">Нічого не завантажено</p>';
+  }
+}
+
+function attachControls(){
+  const searchInput = document.getElementById('searchInput');
+  const filterBtns = document.querySelectorAll('.filter-btn');
+
+  function filterCards(){
+    const query = searchInput.value.toLowerCase().trim();
+    const terms = query.split(/\s+/).filter(Boolean);
+
+    const filtered = data.filter(item => {
+      // шукаємо хоча б одне ключове слово або тег з запиту
+      const allWords = [item.title.toLowerCase(), ...item.keywords, ...item.tags];
+      const matchesQuery = !terms.length || terms.every(term => allWords.includes(term));
+      const matchesFilter = !activeFilter || item.tags.includes(activeFilter);
+      return matchesQuery && matchesFilter;
+    });
+
+    renderCards(filtered);
+  }
+
+  let t;
+  searchInput.addEventListener('input', ()=>{ clearTimeout(t); t = setTimeout(filterCards, 120); });
+
+  filterBtns.forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const val = btn.dataset.filter.toLowerCase();
+      if(activeFilter === val){ activeFilter = ''; btn.classList.remove('active'); }
+      else { activeFilter = val; filterBtns.forEach(b=>b.classList.remove('active')); btn.classList.add('active'); }
+      filterCards();
+    });
+  });
+}
+
+function renderCards(items){
+  const container = document.getElementById('cards');
+  container.innerHTML = '';
+  if(!items.length){ container.innerHTML='<p class="empty">Нічого не знайдено</p>'; return; }
+
+  items.forEach(item=>{
+    const card = document.createElement('div');
+    card.className='card';
+    const tagHtml = item.tags.map(t=>`<span class="tag">${t.charAt(0).toUpperCase()+t.slice(1)}</span>`).join('');
+    card.innerHTML=`
+      <div class="card-header">
+        <h3>${escapeHtml(item.title)}</h3>
+        <div class="tags">${tagHtml}</div>
+      </div>
+      <a class="btn" href="${escapeAttr(item.link)}" target="_blank" rel="noopener noreferrer">Переглянути</a>
+    `;
+    container.appendChild(card);
+  });
+}
+
+function escapeHtml(s){ return s.replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c])); }
+function escapeAttr(s){ return s.replace(/["']/g, m=> (m==='"'?'&quot;':'&#39;')); }
+
+loadData();
+      </script>
