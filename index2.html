@@ -4,13 +4,6 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>@obsessed_vampires</title>
-<style>
-body{font-family:Arial,sans-serif;background:#0d0000;color:#fff;text-align:center;padding:20px;}
-input{padding:8px 12px;border-radius:8px;border:none;width:300px;}
-.card{background:#1a0000;margin:10px;padding:15px;border-radius:12px;box-shadow:0 0 10px #8b0000;text-align:left;}
-.tag{display:inline-block;background:#660000;padding:3px 6px;margin:2px;border-radius:6px;}
-.btn{display:inline-block;margin-top:10px;padding:5px 10px;background:#8b0000;color:#fff;text-decoration:none;border-radius:6px;}
-</style>
 </head>
 <body>
 <h1>Obsessed Vampires</h1>
@@ -25,48 +18,47 @@ const sheetUrl = `https://opensheet.elk.sh/${SHEET_ID}/${encodeURIComponent(TAB_
 let data = [];
 
 async function loadData() {
-  try {
-    const res = await fetch(sheetUrl);
-    const json = await res.json();
+  const res = await fetch(sheetUrl);
+  const json = await res.json();
 
-    data = json.map(row=>{
-      const title = (row['title']||'Без назви').trim();
-      const keywords = (row['keywords']||'').split(',').map(s=>s.trim().toLowerCase());
-      const tags = (row['tags']||'').split('/').map(s=>s.trim().toLowerCase());
-      const link = (row['link']||'#').trim();
-      return {title, keywords, tags, link};
-    });
+  data = json.map(row => {
+    // знайти ключі незалежно від пробілів і регістру
+    const titleKey = Object.keys(row).find(k=>k.toLowerCase().includes('title') || k.toLowerCase().includes('назва'));
+    const keywordsKey = Object.keys(row).find(k=>k.toLowerCase().includes('keyword') || k.toLowerCase().includes('ключ'));
+    const tagsKey = Object.keys(row).find(k=>k.toLowerCase().includes('tag') || k.toLowerCase().includes('тег'));
+    const linkKey = Object.keys(row).find(k=>k.toLowerCase().includes('link') || k.toLowerCase().includes('посилання'));
 
-    renderCards(data);
-  } catch(e) {
-    console.error(e);
-    document.getElementById('cards').innerHTML = '<p>Не вдалося завантажити дані</p>';
-  }
+    const title = titleKey ? row[titleKey].trim() : 'Без назви';
+    const keywords = keywordsKey ? row[keywordsKey].split(/[,;]/).map(s=>s.trim().toLowerCase()) : [];
+    const tags = tagsKey ? row[tagsKey].split('/').map(s=>s.trim().toLowerCase()) : [];
+    let link = linkKey ? row[linkKey].trim() : '#';
+    // виправляємо tg:// на https://t.me/
+    if(link.startsWith('tg://')) link = link.replace(/^tg:\/\/resolve\?domain=/,'https://t.me/');
+    
+    return {title, keywords, tags, link};
+  });
+
+  renderCards(data);
 }
 
 function renderCards(items) {
   const container = document.getElementById('cards');
   container.innerHTML = '';
-  if(!items.length) { container.innerHTML = '<p>Нічого не знайдено</p>'; return; }
-
-  items.forEach(item=>{
-    const tagsHtml = item.tags.map(t=>`<span class="tag">${t}</span>`).join('');
+  if(!items.length) { container.innerHTML='<p>Нічого не знайдено</p>'; return; }
+  items.forEach(item => {
+    const tagsHtml = item.tags.map(t=>`<span>${t}</span>`).join(' ');
     const card = document.createElement('div');
-    card.className = 'card';
-    card.innerHTML = `
-      <h3>${item.title}</h3>
-      <div>${tagsHtml}</div>
-      <a class="btn" href="${item.link}" target="_blank">Переглянути</a>
-    `;
+    card.innerHTML = `<h3>${item.title}</h3><div>${tagsHtml}</div><a href="${item.link}" target="_blank">Переглянути</a>`;
     container.appendChild(card);
   });
 }
 
+// Пошук: будь-який термін з назви, ключових слів чи тегів
 document.getElementById('searchInput').addEventListener('input', e=>{
-  const q = e.target.value.toLowerCase().trim().split(/\s+/);
+  const terms = e.target.value.toLowerCase().split(/\s+/).filter(Boolean);
   const filtered = data.filter(item=>{
     const all = [item.title.toLowerCase(), ...item.keywords, ...item.tags];
-    return q.every(term => all.some(word=>word.includes(term)));
+    return terms.every(term => all.some(word=>word.includes(term)));
   });
   renderCards(filtered);
 });
