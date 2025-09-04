@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>@obsessed_vampires</title>
+<link href="https://fonts.googleapis.com/css2?family=UnifrakturMaguntia&display=swap" rel="stylesheet" />
+<style>
+:root{
+  --bg:#0d0000; --fg:#ffffff; --blood:#8b0000; --blood2:#ff0000; --card:#1a0000; --muted:#ffcccc; --tag:#660000; --tagfg:#ff6666;
+}
+*{box-sizing:border-box}
+body{font-family:Arial,sans-serif;background:var(--bg);color:var(--fg);text-align:center;padding:20px;}
+h1{font-family:'UnifrakturMaguntia',cursive;font-size:3rem;letter-spacing:2px;margin:0 0 20px;text-shadow:0 0 15px var(--blood),0 0 35px var(--blood2);}
+.toolbar{display:flex;flex-direction:column;align-items:center;gap:10px;margin:10px 0 20px;}
+.search{display:flex;gap:8px;align-items:center;}
+.search input[type="text"]{padding:10px 12px;border-radius:10px;border:none;width:300px;max-width:80vw;text-align:center;background:var(--card);color:var(--fg);box-shadow:0 0 10px var(--blood);}
+.status{min-height:20px;font-size:0.9rem;color:#ff8080;}
+.filters{display:flex;flex-wrap:wrap;justify-content:center;gap:8px;}
+.filter-btn{display:inline-block;padding:6px 14px;background:var(--blood);color:#fff;border-radius:15px;cursor:pointer;font-weight:bold;transition:background .3s,transform .2s;user-select:none}
+.filter-btn:hover{transform:scale(1.05)}
+.filter-btn.active{background:var(--blood2);}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:18px;margin-top:20px;}
+.card{background:var(--card);padding:15px;border-radius:15px;box-shadow:0 0 15px var(--blood);transition:transform .2s ease,box-shadow .3s ease;text-align:left;word-wrap:break-word;}
+.card:hover{transform:scale(1.03);box-shadow:0 0 24px var(--blood2);}
+.card-header{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap;margin-bottom:10px;}
+.card h3{font-size:1.25rem;margin:0;color:var(--muted);text-shadow:0 0 5px var(--blood);flex:1 1 auto;}
+.tags{display:flex;gap:6px;flex-wrap:wrap;}
+.tag{background:var(--tag);padding:3px 8px;border-radius:10px;font-size:.8rem;color:var(--tagfg);}
+.btn{display:inline-block;margin-top:10px;padding:8px 12px;background:var(--blood);color:#fff;border-radius:8px;text-decoration:none;font-weight:bold;transition:background .3s ease,color .3s ease;}
+.btn:hover{background:var(--blood2);color:#fff;}
+.skeleton{background:linear-gradient(90deg,rgba(255,255,255,.06),rgba(255,255,255,.12),rgba(255,255,255,.06));background-size:200% 100%;animation:shimmer 1.2s infinite;}
+@keyframes shimmer{0%{background-position:200% 0}100%{background-position:0 0}}
+.empty{opacity:.8;}
+</style>
+</head>
+<body>
+<h1>Obsessed Vampires</h1>
+<div class="toolbar">
+  <div class="search">
+    <input type="text" id="searchInput" placeholder="Шукати…" />
+  </div>
+  <div class="filters">
+    <span class="filter-btn" data-filter="анімовані">Анімовані</span>
+    <span class="filter-btn" data-filter="статичні">Статичні</span>
+    <span class="filter-btn" data-filter="аватарки">Аватарки</span>
+    <span class="filter-btn" data-filter="емоджі">Емоджі</span>
+  </div>
+  <div id="status" class="status"></div>
+</div>
+<div class="cards" id="cards"></div>
+
+<script>
+const SHEET_ID = "16FR9S-8fO4VaiHiY6yEWWmnhB9_NjB48HSYJD58vKrs";
+const TAB_NAME = "Аркуш1";
+const sheetUrl = `https://opensheet.elk.sh/${SHEET_ID}/${encodeURIComponent(TAB_NAME)}`;
+
+let data = [];
+let activeFilter = "";
+const statusEl = document.getElementById('status');
+
+function setStatus(msg){ statusEl.textContent = msg || ""; }
+
+function skeleton(n=6){
+  const container = document.getElementById('cards');
+  container.innerHTML = "";
+  for(let i=0;i<n;i++){
+    const s = document.createElement('div');
+    s.className='card skeleton';
+    s.style.height=(120+Math.floor(Math.random()*40))+'px';
+    container.appendChild(s);
+  }
+}
+
+async function loadData(){
+  try{
+    setStatus('Завантажую дані...');
+    skeleton();
+    const res = await fetch(sheetUrl,{cache:'no-store'});
+    if(!res.ok) throw new Error(`HTTP ${res.status}`);
+    const json = await res.json();
+
+    data = json.map(row=>{
+      const title = row['title']?.toString().trim() || 'Без назви';
+      const kwRaw = row['keywords']?.toString().trim() || '';
+      const linkRaw = row['link']?.toString().trim() || '#';
+      const fixedLink = linkRaw.startsWith('tg://') ? linkRaw.replace(/^tg:\/\/resolve\?domain=/,'https://t.me/') : linkRaw;
+      const tagsRaw = row['tags']?.toString().trim() || '';
+
+      // 🔹 Розбиваємо ключові слова і теги на масиви
+      const keywords = kwRaw.split(/[,/]+/).map(s=>s.trim().toLowerCase()).filter(Boolean);
+      const tags = tagsRaw.split(/[,/]+/).map(s=>s.trim().toLowerCase()).filter(Boolean);
+
+      return { title, keywords, link: fixedLink, tags };
+    });
+
+    renderCards(data);
+    attachControls();
+    setStatus('');
+  }catch(err){
+    console.error(err);
+    setStatus('Не вдалося завантажити дані.');
+    document.getElementById('cards').innerHTML='<p class="empty">Нічого не завантажено</p>';
+  }
+}
+
+function attachControls(){
+  const searchInput=document.getElementById('searchInput');
+  const filterBtns=document.querySelectorAll('.filter-btn');
+
+  function filterCards(){
+    const q=searchInput.value.toLowerCase().trim();
+    const filtered=data.filter(item=>{
+      const all=[item.title.toLowerCase(),...item.keywords,...item.tags];
+      const matchesQuery=!q||all.some(x=>x.includes(q));
+      const matchesFilter=!activeFilter||item.tags.includes(activeFilter);
+      return matchesQuery&&matchesFilter;
+    });
+    renderCards(filtered);
+  }
+
+  let t;
+  searchInput.addEventListener('input',()=>{clearTimeout(t);t=setTimeout(filterCards,120);});
+
+  filterBtns.forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      const val=btn.dataset.filter.toLowerCase();
+      if(activeFilter===val){
+        activeFilter='';btn.classList.remove('active');
+      }else{
+        activeFilter=val;
+        filterBtns.forEach(b=>b.classList.remove('active'));
+        btn.classList.add('active');
+      }
+      filterCards();
+    });
+  });
+}
+
+function renderCards(items){
+  const container=document.getElementById('cards');
+  container.innerHTML='';
+  if(!items.length){
+    container.innerHTML='<p class="empty">Нічого не знайдено</p>';
+    return;
+  }
+  items.forEach(item=>{
+    const card=document.createElement('div');
+    card.className='card';
+    const tagHtml=item.tags.map(t=>`<span class="tag">${t.charAt(0).toUpperCase()+t.slice(1)}</span>`).join('');
+    card.innerHTML=`
+      <div class="card-header">
+        <h3>${escapeHtml(item.title)}</h3>
+        <div class="tags">${tagHtml}</div>
+      </div>
+      <a class="btn" href="${escapeAttr(item.link)}" target="_blank" rel="noopener noreferrer">Переглянути</a>
+    `;
+    container.appendChild(card);
+  });
+}
+
+function escapeHtml(s){return s.replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));}
+function escapeAttr(s){return s.replace(/["']/g,m=>(m==='"'?'&quot;':'&#39;'));}
+
+loadData();
+</script>
+</body>
+</html>
