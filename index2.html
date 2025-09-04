@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>@obsessed_vampires</title>
+<style>
+body{font-family:Arial,sans-serif;background:#0d0000;color:#fff;text-align:center;padding:20px;}
+input{padding:8px 12px;border-radius:8px;border:none;width:300px;}
+.card{background:#1a0000;margin:10px;padding:15px;border-radius:12px;box-shadow:0 0 10px #8b0000;text-align:left;}
+.tag{display:inline-block;background:#660000;padding:3px 6px;margin:2px;border-radius:6px;}
+.btn{display:inline-block;margin-top:10px;padding:5px 10px;background:#8b0000;color:#fff;text-decoration:none;border-radius:6px;}
+</style>
+</head>
+<body>
+<h1>Obsessed Vampires</h1>
+<input id="searchInput" placeholder="Шукати..." />
+<div id="cards"></div>
+
+<script>
+const SHEET_ID = "16FR9S-8fO4VaiHiY6yEWWmnhB9_NjB48HSYJD58vKrs";
+const TAB_NAME = "Аркуш1";
+const sheetUrl = `https://opensheet.elk.sh/${SHEET_ID}/${encodeURIComponent(TAB_NAME)}`;
+
+let data = [];
+
+async function loadData() {
+  try {
+    const res = await fetch(sheetUrl);
+    const json = await res.json();
+
+    data = json.map(row=>{
+      const title = (row['title']||'Без назви').trim();
+      const keywords = (row['keywords']||'').split(',').map(s=>s.trim().toLowerCase());
+      const tags = (row['tags']||'').split('/').map(s=>s.trim().toLowerCase());
+      const link = (row['link']||'#').trim();
+      return {title, keywords, tags, link};
+    });
+
+    renderCards(data);
+  } catch(e) {
+    console.error(e);
+    document.getElementById('cards').innerHTML = '<p>Не вдалося завантажити дані</p>';
+  }
+}
+
+function renderCards(items) {
+  const container = document.getElementById('cards');
+  container.innerHTML = '';
+  if(!items.length) { container.innerHTML = '<p>Нічого не знайдено</p>'; return; }
+
+  items.forEach(item=>{
+    const tagsHtml = item.tags.map(t=>`<span class="tag">${t}</span>`).join('');
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.innerHTML = `
+      <h3>${item.title}</h3>
+      <div>${tagsHtml}</div>
+      <a class="btn" href="${item.link}" target="_blank">Переглянути</a>
+    `;
+    container.appendChild(card);
+  });
+}
+
+document.getElementById('searchInput').addEventListener('input', e=>{
+  const q = e.target.value.toLowerCase().trim().split(/\s+/);
+  const filtered = data.filter(item=>{
+    const all = [item.title.toLowerCase(), ...item.keywords, ...item.tags];
+    return q.every(term => all.some(word=>word.includes(term)));
+  });
+  renderCards(filtered);
+});
+
+loadData();
+</script>
+</body>
+</html>
