@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <html lang="uk">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>@obsessed_vampires</title>
 </head>
 <body>
@@ -22,19 +22,22 @@ async function loadData() {
   const json = await res.json();
 
   data = json.map(row => {
-    // знайти ключі незалежно від пробілів і регістру
-    const titleKey = Object.keys(row).find(k=>k.toLowerCase().includes('title') || k.toLowerCase().includes('назва'));
-    const keywordsKey = Object.keys(row).find(k=>k.toLowerCase().includes('keyword') || k.toLowerCase().includes('ключ'));
-    const tagsKey = Object.keys(row).find(k=>k.toLowerCase().includes('tag') || k.toLowerCase().includes('тег'));
-    const linkKey = Object.keys(row).find(k=>k.toLowerCase().includes('link') || k.toLowerCase().includes('посилання'));
+    // універсальне визначення колонок
+    const titleKey = Object.keys(row).find(k => /title|назва/i.test(k));
+    const keywordsKey = Object.keys(row).find(k => /keyword|ключ/i.test(k));
+    const tagsKey = Object.keys(row).find(k => /tag|тег/i.test(k));
+    const linkKey = Object.keys(row).find(k => /link|посилання/i.test(k));
 
-    const title = titleKey ? row[titleKey].trim() : 'Без назви';
-    const keywords = keywordsKey ? row[keywordsKey].split(/[,;]/).map(s=>s.trim().toLowerCase()) : [];
-    const tags = tagsKey ? row[tagsKey].split('/').map(s=>s.trim().toLowerCase()) : [];
-    let link = linkKey ? row[linkKey].trim() : '#';
-    // виправляємо tg:// на https://t.me/
+    const title = row[titleKey]?.trim() || 'Без назви';
+    const keywords = row[keywordsKey]
+      ? row[keywordsKey].split(/[,;]+/).map(s=>s.trim().toLowerCase()).filter(Boolean)
+      : [];
+    const tags = row[tagsKey]
+      ? row[tagsKey].split(/[/;]+/).map(s=>s.trim().toLowerCase()).filter(Boolean)
+      : [];
+    let link = row[linkKey]?.trim() || '#';
     if(link.startsWith('tg://')) link = link.replace(/^tg:\/\/resolve\?domain=/,'https://t.me/');
-    
+
     return {title, keywords, tags, link};
   });
 
@@ -45,20 +48,21 @@ function renderCards(items) {
   const container = document.getElementById('cards');
   container.innerHTML = '';
   if(!items.length) { container.innerHTML='<p>Нічого не знайдено</p>'; return; }
+
   items.forEach(item => {
-    const tagsHtml = item.tags.map(t=>`<span>${t}</span>`).join(' ');
+    const tagsHtml = item.tags.map(t => `<span>${t}</span>`).join(' ');
     const card = document.createElement('div');
     card.innerHTML = `<h3>${item.title}</h3><div>${tagsHtml}</div><a href="${item.link}" target="_blank">Переглянути</a>`;
     container.appendChild(card);
   });
 }
 
-// Пошук: будь-який термін з назви, ключових слів чи тегів
-document.getElementById('searchInput').addEventListener('input', e=>{
-  const terms = e.target.value.toLowerCase().split(/\s+/).filter(Boolean);
-  const filtered = data.filter(item=>{
+// пошук по всіх полях
+document.getElementById('searchInput').addEventListener('input', e => {
+  const term = e.target.value.toLowerCase().trim();
+  const filtered = data.filter(item => {
     const all = [item.title.toLowerCase(), ...item.keywords, ...item.tags];
-    return terms.every(term => all.some(word=>word.includes(term)));
+    return all.some(word => word.includes(term));
   });
   renderCards(filtered);
 });
